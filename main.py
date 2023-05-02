@@ -1,72 +1,52 @@
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix, roc_auc_score
 from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
-# Load and preprocess the dataset
+# Load the dataset
 data = pd.read_csv("water_potability.csv")
-data = data.dropna()
 
-X = data.drop('Potability', axis=1)
-y = data['Potability']
+# Handling missing values by dropping rows with NaN values
+data.dropna(inplace=True)
 
+# Split the dataset into features (X) and target (y)
+X = data.drop("Potability", axis=1)
+y = data["Potability"]
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Feature scaling using StandardScaler
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
 
-X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.3, random_state=42)
-
-# Random Forest model and hyperparameter tuning
+# Define the Random Forest model with a parameter grid for hyperparameter tuning
+rf_model = RandomForestClassifier(random_state=42)
 param_grid = {
     'n_estimators': [50, 100, 200],
-    'max_depth': [5, 10, 20]
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4]
 }
 
-rf = RandomForestClassifier(random_state=42)
-grid_search = GridSearchCV(estimator=rf, param_grid=param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+# Perform grid search with cross-validation to find the best hyperparameters
+grid_search = GridSearchCV(estimator=rf_model, param_grid=param_grid, cv=5, scoring='accuracy', verbose=2, n_jobs=-1)
 grid_search.fit(X_train, y_train)
+best_rf_model = grid_search.best_estimator_
 
-best_rf = grid_search.best_estimator_
+# Print the best hyperparameters
+print("Best Hyperparameters:", grid_search.best_params_)
 
-# Model evaluation
-y_pred = best_rf.predict(X_test)
+# Evaluate the model with the best hyperparameters
+y_pred = best_rf_model.predict(X_test)
+y_proba = best_rf_model.predict_proba(X_test)
 
-accuracy = accuracy_score(y_test, y_pred)
-precision = precision_score(y_test, y_pred, average='weighted')
-recall = recall_score(y_test, y_pred, average='weighted')
-f1 = f1_score(y_test, y_pred, average='weighted')
-roc_auc = roc_auc_score(y_test, best_rf.predict_proba(X_test)[:, 1])
+print("Confusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
 
-print("Accuracy:", accuracy)
-print("Precision:", precision)
-print("Recall:", recall)
-print("F1-score:", f1)
-print("ROC AUC:", roc_auc)
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
 
-
-
-metrics = ["Accuracy", "Precision", "Recall", "F1-Score", "ROC AUC Score"]
-values = [accuracy, precision, recall, f1, roc_auc]
-
-# Plot the performance metrics
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.barplot(x=metrics, y=values)
-ax.set_ylim(0, 1)
-ax.set_title("Random Forest Model Performance")
-plt.show()
-
-feature_importances = best_rf.feature_importances_
-print("Feature Importances:", feature_importances)
-
-# Assuming you have the feature importances in the following variable:
-# feature_importances
-
-features = ["ph", "Hardness", "Solids", "Chloramines", "Sulfate", "Conductivity", "Organic_carbon", "Trihalomethanes", "Turbidity"]
-
-# Plot the feature importances
-fig, ax = plt.subplots(figsize=(10, 6))
-sns.barplot(x=feature_importances, y=features, orient="h")
-ax.set_title("Feature Importance in Random Forest Model")
-plt.show()
+print("ROC AUC Score:", roc_auc_score(y_test, y_proba[:, 1]))
